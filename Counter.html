@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shift Balance Calculator</title>
+    <!-- Tailwind CSS for fast, responsive UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS for processing Excel files directly in the browser -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-slate-100 min-h-screen p-4 flex flex-col items-center">
+    <div class="w-full max-w-md space-y-6">
+        
+        <!-- Main Calculator Card -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">End of Shift Count</h2>
+
+            <!-- Excel File Loader -->
+            <div class="mb-6 p-4 bg-slate-50 border-2 border-dashed border-slate-300 rounded-lg">
+                <label class="block text-sm font-bold text-slate-700 mb-2">1. Load Specs Excel File</label>
+                <input type="file" id="excel-file" accept=".xlsx, .xls" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200" />
+                <p id="file-status" class="text-sm text-red-500 mt-2 font-bold">No file loaded yet</p>
+                <p class="text-xs text-slate-400 mt-1">Scanning <strong>Rows 2–19</strong> | Order: <strong>Col B</strong>, Cases/Layer: <strong>Col N</strong></p>
+            </div>
+
+            <!-- Calculator Inputs -->
+            <div class="space-y-4">
+                
+                <!-- Date and Line Tracker -->
+                <div class="flex gap-4">
+                    <div class="w-1/2">
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Date</label>
+                        <input type="date" id="shift-date" class="w-full p-3 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none disabled:bg-slate-100" disabled>
+                    </div>
+                    <div class="w-1/2">
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Line #</label>
+                        <input type="number" id="line-num" onchange="switchLine()" class="w-full text-xl p-3 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none disabled:bg-slate-100" value="1" disabled>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Work Order Number</label>
+                    <!-- oninput auto-saves the order to the line as you type -->
+                    <input type="text" id="order-num" oninput="saveWorkOrder()" class="w-full text-xl p-3 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none disabled:bg-slate-100" placeholder="e.g. 0012300" disabled>
+                </div>
+                
+                <div class="flex gap-4">
+                    <div class="w-1/2">
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Full Layers</label>
+                        <input type="number" id="layers" class="w-full text-xl p-3 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none disabled:bg-slate-100" placeholder="0" disabled>
+                    </div>
+                    <div class="w-1/2">
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Extra Cases</label>
+                        <input type="number" id="extras" class="w-full text-xl p-3 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none disabled:bg-slate-100" placeholder="0" disabled>
+                    </div>
+                </div>
+
+                <button id="calc-btn" onclick="calculateTotal()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xl py-4 rounded-lg shadow-md transition-colors mt-4 opacity-50 cursor-not-allowed" disabled>
+                    Calculate & Save
+                </button>
+                
+                <div class="flex gap-2 mt-2">
+                    <button id="prev-line-btn" onclick="prevLine()" class="w-1/2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-lg py-3 rounded-lg shadow transition-colors opacity-50 cursor-not-allowed" disabled>
+                        ⬅️ Prev Line
+                    </button>
+                    <button id="next-line-btn" onclick="nextLine()" class="w-1/2 bg-slate-300 hover:bg-slate-400 text-slate-800 font-bold text-lg py-3 rounded-lg shadow transition-colors opacity-50 cursor-not-allowed" disabled>
+                        Next Line ➔
+                    </button>
+                </div>
+            </div>
+
+            <!-- Result Display -->
+            <div id="result-box" class="mt-6 hidden bg-green-50 border-2 border-green-400 rounded-lg p-4 text-center">
+                <p class="text-sm text-green-700 font-bold uppercase tracking-wide">Total Cases</p>
+                <p id="result-text" class="text-6xl font-black text-green-700 mt-1"></p>
+                <p id="cases-per-layer-text" class="text-sm text-green-600 mt-2 font-semibold"></p>
+            </div>
+        </div>
+
+        <!-- Shift History Card -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-slate-800">Shift Tallies History</h3>
+                <button onclick="clearHistory()" class="text-xs bg-red-100 text-red-600 hover:bg-red-200 font-bold px-3 py-1.5 rounded-md transition-colors">Clear History</button>
+            </div>
+            
+            <div id="history-container" class="space-y-2 max-h-60 overflow-y-auto">
+                <p class="text-sm text-slate-400 text-center py-4">No tallies recorded yet.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let orderDatabase = {};
+        let shiftHistory = [];
+        let preloadedOrders = {}; // Stores the Work Orders assigned to each line
+
+        // Set today's date automatically on load
+        document.getElementById('shift-date').valueAsDate = new Date();
+
+        // Load history and preloaded orders from local storage when page opens
+        window.addEventListener('DOMContentLoaded', function() {
+            const savedHistory = localStorage.getItem('shift_tallies_history');
+            if (savedHistory) {
+                try {
+                    shiftHistory = JSON.parse(savedHistory);
+                    renderHistory();
+                } catch (e) {
+                    console.error("Could not load history", e);
+                }
+            }
+
+            const savedOrders = localStorage.getItem('shift_preloaded_orders');
+            if (savedOrders) {
+                try {
+                    preloadedOrders = JSON.parse(savedOrders);
+                } catch (e) {
+                    console.error("Could not load preloaded orders", e);
+                }
+            }
+        });
+
+        // Parse the Excel File when uploaded
+        document.getElementById('excel-file').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+                
+                orderDatabase = {};
+                
+                const orderColIndex = 1; 
+                const casesColIndex = 13; 
+
+                // Scans rows 2-19
+                for (let i = 1; i < json.length; i++) {
+                    const row = json[i];
+                    if (row && row.length > casesColIndex) {
+                        const order = String(row[orderColIndex]).trim();
+                        const cases = parseInt(row[casesColIndex]);
+                        
+                        if (order && order !== "undefined" && order !== "" && !isNaN(cases)) {
+                            orderDatabase[order] = cases;
+                        }
+                    }
+                }
+
+                const count = Object.keys(orderDatabase).length;
+                const status = document.getElementById('file-status');
+                status.textContent = `✓ Loaded (${count} line specs mapped)`;
+                status.className = 'text-sm text-green-600 mt-2 font-bold';
+                
+                // Unlock all fields
+                document.getElementById('shift-date').disabled = false;
+                document.getElementById('line-num').disabled = false;
+                document.getElementById('order-num').disabled = false;
+                document.getElementById('layers').disabled = false;
+                document.getElementById('extras').disabled = false;
+                
+                document.getElementById('calc-btn').disabled = false;
+                document.getElementById('calc-btn').classList.remove('opacity-50', 'cursor-not-allowed');
+
+                document.getElementById('next-line-btn').disabled = false;
+                document.getElementById('next-line-btn').classList.remove('opacity-50', 'cursor-not-allowed');
+                
+                document.getElementById('prev-line-btn').disabled = false;
+                document.getElementById('prev-line-btn').classList.remove('opacity-50', 'cursor-not-allowed');
+
+                // Auto-fill the Work Order for Line 1 if it was preloaded previously
+                switchLine();
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        // Automatically saves the Work Order for the current line as you type
+        function saveWorkOrder() {
+            const lineNum = document.getElementById('line-num').value;
+            const orderNum = document.getElementById('order-num').value.trim();
+            preloadedOrders[lineNum] = orderNum;
+            localStorage.setItem('shift_preloaded_orders', JSON.stringify(preloadedOrders));
+        }
+
+        // Refreshes the form inputs when you change lines
+        function switchLine() {
+            const lineNum = document.getElementById('line-num').value;
+            
+            // Load the pre-entered work order for this line, or leave it blank
+            document.getElementById('order-num').value = preloadedOrders[lineNum] || '';
+            
+            // Clear the layer and extra counts for the new line
+            document.getElementById('layers').value = '';
+            document.getElementById('extras').value = '';
+            
+            // Hide the result box
+            document.getElementById('result-box').classList.add('hidden');
+        }
+
+        // Advance to the next line
+        function nextLine() {
+            let lineInput = document.getElementById('line-num');
+            let currentLine = parseInt(lineInput.value) || 0;
+            
+            if (currentLine < 19) {
+                lineInput.value = currentLine + 1;
+            } else {
+                lineInput.value = 1;
+            }
+            switchLine();
+        }
+
+        // Go back to the previous line
+        function prevLine() {
+            let lineInput = document.getElementById('line-num');
+            let currentLine = parseInt(lineInput.value) || 2;
+            
+            if (currentLine > 1) {
+                lineInput.value = currentLine - 1;
+            } else {
+                lineInput.value = 19;
+            }
+            switchLine();
+        }
+
+        // Run the math, display result, and save to local storage
+        function calculateTotal() {
+            const shiftDate = document.getElementById('shift-date').value;
+            const lineNum = document.getElementById('line-num').value || "?";
+            const orderNum = document.getElementById('order-num').value.trim();
+            const layers = parseInt(document.getElementById('layers').value) || 0;
+            const extras = parseInt(document.getElementById('extras').value) || 0;
+
+            if (!orderNum) {
+                alert('Please enter a Work Order Number.');
+                return;
+            }
+
+            if (!orderDatabase[orderNum]) {
+                alert('Order number "' + orderNum + '" was not found in Column B of the specs page.');
+                return;
+            }
+
+            const casesPerLayer = orderDatabase[orderNum];
+            const total = (layers * casesPerLayer) + extras;
+            const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            document.getElementById('result-text').textContent = total;
+            document.getElementById('cases-per-layer-text').textContent = `(${layers} layers × ${casesPerLayer} + ${extras} extra from Col N)`;
+            document.getElementById('result-box').classList.remove('hidden');
+
+            const record = {
+                date: shiftDate,
+                time: timestamp,
+                line: lineNum,
+                order: orderNum,
+                layers: layers,
+                extras: extras,
+                total: total
+            };
+
+            shiftHistory.unshift(record);
+            localStorage.setItem('shift_tallies_history', JSON.stringify(shiftHistory));
+            
+            renderHistory();
+        }
+
+        // Render history list onto the UI
+        function renderHistory() {
+            const container = document.getElementById('history-container');
+            
+            if (shiftHistory.length === 0) {
+                container.innerHTML = '<p class="text-sm text-slate-400 text-center py-4">No tallies recorded yet.</p>';
+                return;
+            }
+
+            container.innerHTML = '';
+            shiftHistory.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'bg-slate-50 border border-slate-200 p-3 rounded-lg flex justify-between items-center';
+                div.innerHTML = `
+                    <div>
+                        <p class="text-xs text-slate-400">${item.date} @ ${item.time}</p>
+                        <p class="font-bold text-slate-700">Line ${item.line} | Order: ${item.order}</p>
+                        <p class="text-xs text-slate-500">${item.layers} layers + ${item.extras} extra</p>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xl font-black text-blue-600">${item.total}</span>
+                        <p class="text-[10px] text-slate-400 uppercase tracking-wider">Cases</p>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // Wipe history
+        function clearHistory() {
+            if (confirm("Are you sure you want to clear your shift tally history?")) {
+                shiftHistory = [];
+                localStorage.removeItem('shift_tallies_history');
+                renderHistory();
+            }
+        }
+    </script>
+</body>
+</html>
